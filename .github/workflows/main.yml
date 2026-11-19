@@ -1,33 +1,87 @@
 
-name: Build YOUMIR MATCH APK
+name: YOUMIR MATCH - Build APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
   build:
+    name: Build YOUMIR MATCH Android
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download project
+      - name: Checkout Project
         uses: actions/checkout@v4
 
-      - name: Install Java
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
+      - name: Prepare Web Files
+        shell: bash
+        run: |
+          if [ -f "www/index.html" ]; then
+            echo "Using www folder"
+          elif [ -f "index.html" ]; then
+            mkdir -p www
+            rsync -a \
+              --exclude='.git' \
+              --exclude='.github' \
+              --exclude='node_modules' \
+              --exclude='android' \
+              --exclude='www' \
+              ./ www/
+          else
+            echo "ERROR: index.html not found"
+            exit 1
+          fi
+
+      - name: Create Capacitor Configuration
+        run: |
+          npm init -y
+          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
+
+          cat > capacitor.config.json <<'EOF'
+          {
+            "appId": "com.youssefelamir.youmirmatch",
+            "appName": "YOUMIR MATCH",
+            "webDir": "www",
+            "bundledWebRuntime": false,
+            "server": {
+              "androidScheme": "https"
+            }
+          }
+          EOF
+
+      - name: Create Android Project
+        run: npx cap add android
+
+      - name: Sync Web App
+        run: npx cap sync android
 
       - name: Build APK
-        run: gradle assembleDebug
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Upload YOUMIR MATCH APK
         uses: actions/upload-artifact@v4
         with:
           name: YOUMIR-MATCH-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
