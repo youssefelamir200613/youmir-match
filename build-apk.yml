@@ -1,0 +1,67 @@
+
+name: YOUMIR MATCH APK Builder
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Create Capacitor Project
+        run: |
+          mkdir -p www
+          mkdir -p /tmp/youmir-site
+
+          rsync -av ./ /tmp/youmir-site/ \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=node_modules \
+            --exclude=android \
+            --exclude=www
+
+          cp -r /tmp/youmir-site/. www/
+
+          npm init -y
+          npm install @capacitor/core@7 @capacitor/android@7 @capacitor/cli@7
+
+          cat > capacitor.config.json <<'EOF'
+          {
+            "appId": "com.youssefelamir.youmirmatch",
+            "appName": "YOUMIR MATCH",
+            "webDir": "www"
+          }
+          EOF
+
+          npx cap add android
+
+      - name: Build Android APK
+        run: |
+          npx cap sync android
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: YOUMIR-MATCH-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
